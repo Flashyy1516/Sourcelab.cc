@@ -2,12 +2,8 @@
   const CART_KEY='sourcelab.cart.v1';
   const WISHLIST_KEY='sourcelab.wishlist.v1';
 
-  const API_URL=(
-    window.SourceLabAPIUrl ||
-    'https://encountered-computational-proposed-additions.trycloudflare.com/'
-  ).replace(/\/$/,'');
-
-  const ORDER_URL=`${API_URL}/api/order`;
+  const ORDER_URL='https://departure-corners-petersburg-trustee.trycloudflare.com/api/order';
+  const API_URL='https://departure-corners-petersburg-trustee.trycloudflare.com/';
 
   function read(key,fallback){
     try{
@@ -111,7 +107,9 @@
 
     if(!target)return;
 
-    target.quantity=Math.max(1,Number(quantity)||1);
+    const next=Math.max(1,Number(quantity)||1);
+
+    target.quantity=next;
 
     saveCart(items);
     update();
@@ -154,10 +152,7 @@
         <div class="cart-item-media">
           ${
             item.image
-              ? `<img
-                  src="${escapeHtml(item.image)}"
-                  alt="${escapeHtml(item.name||'')}"
-                >`
+              ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name||'')}">`
               : ''
           }
         </div>
@@ -234,7 +229,9 @@
     const state=cart();
 
     if(!state.length){
-      window.SourceLabUI?.toast('Your cart is empty');
+      window.SourceLabUI?.toast(
+        'Your cart is empty'
+      );
       return;
     }
 
@@ -244,80 +241,109 @@
     }));
 
     const button=
-      document.querySelector('[data-demo-checkout]');
+      document.querySelector(
+        '[data-demo-checkout]'
+      );
 
     if(button){
       button.disabled=true;
-      button.setAttribute('aria-busy','true');
+      button.setAttribute(
+        'aria-busy',
+        'true'
+      );
     }
 
     try{
-      const response=await fetch(ORDER_URL,{
-        method:'POST',
+      const response=await fetch(
+        ORDER_URL,
+        {
+          method:'POST',
 
-        headers:{
-          'Content-Type':'application/json',
-          'Accept':'application/json'
-        },
+          headers:{
+            'Content-Type':'application/json',
+            'Accept':'application/json'
+          },
 
-        body:JSON.stringify({
-          products
-        })
-      });
+          body:JSON.stringify({
+            products
+          })
+        }
+      );
 
       if(!response.ok){
-        const detail=
-          await response.text().catch(()=>'');
+        let message='';
+
+        try{
+          message=await response.text();
+        }catch{}
 
         throw new Error(
-          `Order request failed: ${response.status}${
-            detail
-              ? ` - ${detail.slice(0,200)}`
-              : ''
-          }`
+          `Order request failed: ${response.status} ${message}`
         );
       }
 
       /*
-       * If the server redirects directly to checkout,
-       * fetch follows the redirect automatically.
+       * If the API directly redirected fetch()
+       * to a checkout page, use that URL.
        */
       if(
         response.redirected &&
-        /\/checkout\//.test(response.url)
+        response.url.includes('/checkout/')
       ){
-        window.location.assign(response.url);
+        window.location.href=response.url;
         return;
       }
 
-      const contentType=
-        response.headers.get('content-type')||'';
+      let order;
 
-      if(!contentType.includes('application/json')){
+      try{
+        order=await response.json();
+      }catch{
         throw new Error(
-          'Order API returned a non-JSON response'
+          'Server returned an invalid JSON response'
         );
       }
 
-      const order=await response.json();
-
+      /*
+       * Support the normal order_id response,
+       * plus a couple of common alternatives.
+       */
       const orderId=
-        order.order_id ??
-        order.orderId ??
+        order.order_id ||
+        order.orderId ||
         order.id;
 
+      /*
+       * If backend sends a checkout URL directly,
+       * use it.
+       */
+      const directCheckoutUrl=
+        order.checkout_url ||
+        order.checkoutUrl ||
+        order.url;
+
+      if(directCheckoutUrl){
+        window.location.href=
+          directCheckoutUrl;
+        return;
+      }
+
       if(!orderId){
+        console.error(
+          'Unexpected order response:',
+          order
+        );
+
         throw new Error(
-          'Server did not return an order id'
+          'Server did not return an order_id'
         );
       }
 
       const checkoutUrl=
-        `${API_URL}/checkout/${
-          encodeURIComponent(orderId)
-        }`;
+        `${new URL(API_URL).origin}/checkout/${encodeURIComponent(orderId)}`;
 
-      window.location.assign(checkoutUrl);
+      window.location.href=
+        checkoutUrl;
 
     }catch(error){
       console.error(
@@ -331,17 +357,24 @@
 
       if(button){
         button.disabled=false;
-        button.removeAttribute('aria-busy');
+
+        button.removeAttribute(
+          'aria-busy'
+        );
       }
     }
   }
 
   function update(){
     const page=
-      document.querySelector('[data-cart-page]');
+      document.querySelector(
+        '[data-cart-page]'
+      );
 
     const summary=
-      document.querySelector('[data-cart-summary]');
+      document.querySelector(
+        '[data-cart-summary]'
+      );
 
     const items=cart();
 
@@ -351,7 +384,9 @@
         page.innerHTML=`
           <div class="empty-state">
 
-            <h2>Your cart is empty.</h2>
+            <h2>
+              Your cart is empty.
+            </h2>
 
             <p>
               Add some products to continue.
@@ -368,8 +403,12 @@
         `;
 
       }else{
+
         page.innerHTML=
-          items.map(cartMarkup).join('');
+          items
+            .map(cartMarkup)
+            .join('');
+
       }
     }
 
@@ -385,18 +424,39 @@
           </p>
 
           <div class="cart-summary-row">
-            <span>Items</span>
-            <strong>${count()}</strong>
+
+            <span>
+              Items
+            </span>
+
+            <strong>
+              ${count()}
+            </strong>
+
           </div>
 
           <div class="cart-summary-row">
-            <span>Subtotal</span>
-            <strong>${money(total)}</strong>
+
+            <span>
+              Subtotal
+            </span>
+
+            <strong>
+              ${money(total)}
+            </strong>
+
           </div>
 
           <div class="cart-summary-total">
-            <span>Total</span>
-            <strong>${money(total)}</strong>
+
+            <span>
+              Total
+            </span>
+
+            <strong>
+              ${money(total)}
+            </strong>
+
           </div>
 
           <button
@@ -408,7 +468,9 @@
             Continue to checkout
           </button>
 
-          <p>Secure checkout.</p>
+          <p>
+            Secure checkout.
+          </p>
 
         </div>
       `;
@@ -421,15 +483,22 @@
     const items=wishlist();
 
     document
-      .querySelectorAll('[data-wishlist]')
+      .querySelectorAll(
+        '[data-wishlist]'
+      )
       .forEach(button=>{
 
         const id=
-          button.getAttribute('data-wishlist');
+          button.getAttribute(
+            'data-wishlist'
+          );
 
-        const active=items.some(
-          item=>String(item)===String(id)
-        );
+        const active=
+          items.some(
+            item=>
+              String(item)===
+              String(id)
+          );
 
         button.classList.toggle(
           'is-active',
@@ -438,119 +507,171 @@
 
         button.setAttribute(
           'aria-pressed',
-          active?'true':'false'
+          active
+            ? 'true'
+            : 'false'
         );
+
       });
   }
 
   function toggleWishlist(id){
     const items=wishlist();
 
-    const index=items.findIndex(
-      item=>String(item)===String(id)
-    );
+    const index=
+      items.findIndex(
+        item=>
+          String(item)===
+          String(id)
+      );
 
     if(index===-1){
       items.push(id);
     }else{
-      items.splice(index,1);
+      items.splice(
+        index,
+        1
+      );
     }
 
     saveWishlist(items);
     refreshWishlist();
   }
 
-  document.addEventListener('click',event=>{
+  document.addEventListener(
+    'click',
+    event=>{
 
-    const removeButton=
-      event.target.closest('[data-cart-remove]');
-
-    if(removeButton){
-      remove(
-        removeButton.dataset.id,
-        removeButton.dataset.size||'',
-        removeButton.dataset.variant||''
-      );
-
-      return;
-    }
-
-    const minusButton=
-      event.target.closest('[data-cart-minus]');
-
-    if(minusButton){
-
-      const item=cart().find(item=>
-        String(item.id)===
-          String(minusButton.dataset.id)&&
-
-        String(item.size||'')===
-          String(minusButton.dataset.size||'')&&
-
-        String(item.variant||'')===
-          String(minusButton.dataset.variant||'')
-      );
-
-      if(item){
-        setQuantity(
-          item.id,
-          Math.max(
-            1,
-            (Number(item.quantity)||1)-1
-          ),
-          item.size||'',
-          item.variant||''
+      const removeButton=
+        event.target.closest(
+          '[data-cart-remove]'
         );
+
+      if(removeButton){
+
+        remove(
+          removeButton.dataset.id,
+          removeButton.dataset.size||'',
+          removeButton.dataset.variant||''
+        );
+
+        return;
       }
 
-      return;
-    }
-
-    const plusButton=
-      event.target.closest('[data-cart-plus]');
-
-    if(plusButton){
-
-      const item=cart().find(item=>
-        String(item.id)===
-          String(plusButton.dataset.id)&&
-
-        String(item.size||'')===
-          String(plusButton.dataset.size||'')&&
-
-        String(item.variant||'')===
-          String(plusButton.dataset.variant||'')
-      );
-
-      if(item){
-        setQuantity(
-          item.id,
-          (Number(item.quantity)||1)+1,
-          item.size||'',
-          item.variant||''
+      const minusButton=
+        event.target.closest(
+          '[data-cart-minus]'
         );
+
+      if(minusButton){
+
+        const item=
+          cart().find(item=>
+
+            String(item.id)===
+              String(
+                minusButton.dataset.id
+              )&&
+
+            String(item.size||'')===
+              String(
+                minusButton.dataset.size||''
+              )&&
+
+            String(item.variant||'')===
+              String(
+                minusButton.dataset.variant||''
+              )
+
+          );
+
+        if(item){
+
+          setQuantity(
+            item.id,
+
+            Math.max(
+              1,
+              (Number(item.quantity)||1)-1
+            ),
+
+            item.size||'',
+            item.variant||''
+          );
+
+        }
+
+        return;
       }
 
-      return;
+      const plusButton=
+        event.target.closest(
+          '[data-cart-plus]'
+        );
+
+      if(plusButton){
+
+        const item=
+          cart().find(item=>
+
+            String(item.id)===
+              String(
+                plusButton.dataset.id
+              )&&
+
+            String(item.size||'')===
+              String(
+                plusButton.dataset.size||''
+              )&&
+
+            String(item.variant||'')===
+              String(
+                plusButton.dataset.variant||''
+              )
+
+          );
+
+        if(item){
+
+          setQuantity(
+            item.id,
+
+            (Number(item.quantity)||1)+1,
+
+            item.size||'',
+            item.variant||''
+          );
+
+        }
+
+        return;
+      }
+
+      const checkoutButton=
+        event.target.closest(
+          '[data-demo-checkout]'
+        );
+
+      if(checkoutButton){
+        checkout();
+        return;
+      }
+
+      const wishlistButton=
+        event.target.closest(
+          '[data-wishlist]'
+        );
+
+      if(wishlistButton){
+
+        toggleWishlist(
+          wishlistButton.dataset.wishlist
+        );
+
+      }
+
     }
-
-    const checkoutButton=
-      event.target.closest('[data-demo-checkout]');
-
-    if(checkoutButton){
-      checkout();
-      return;
-    }
-
-    const wishlistButton=
-      event.target.closest('[data-wishlist]');
-
-    if(wishlistButton){
-      toggleWishlist(
-        wishlistButton.dataset.wishlist
-      );
-    }
-  });
+  );
 
   window.SourceLabCart={
     cart,
@@ -565,7 +686,10 @@
     checkout
   };
 
-  if(document.readyState==='loading'){
+  if(
+    document.readyState===
+    'loading'
+  ){
 
     document.addEventListener(
       'DOMContentLoaded',
@@ -573,7 +697,9 @@
     );
 
   }else{
+
     update();
+
   }
 
 })();
