@@ -2,8 +2,12 @@
   const CART_KEY='sourcelab.cart.v1';
   const WISHLIST_KEY='sourcelab.wishlist.v1';
 
-  const ORDER_URL='https://encountered-computational-proposed-additions.trycloudflare.com/api/order';
-  const API_URL='https://encountered-computational-proposed-additions.trycloudflare.com/';
+  const API_URL=(
+    window.SourceLabAPIUrl ||
+    'https://encountered-computational-proposed-additions.trycloudflare.com/'
+  ).replace(/\/$/,'');
+
+  const ORDER_URL=`${API_URL}/api/order`;
 
   function read(key,fallback){
     try{
@@ -45,7 +49,10 @@
 
   function resolveProduct(id){
     const products=window.SourceLabProducts?.products||[];
-    return products.find(product=>String(product.id)===String(id));
+
+    return products.find(
+      product=>String(product.id)===String(id)
+    );
   }
 
   function add(id,size='',variant='',quantity=1){
@@ -62,7 +69,9 @@
     );
 
     if(existing){
-      existing.quantity=(Number(existing.quantity)||0)+(Number(quantity)||1);
+      existing.quantity=
+        (Number(existing.quantity)||0)+
+        (Number(quantity)||1);
     }else{
       items.push({
         ...product,
@@ -102,8 +111,7 @@
 
     if(!target)return;
 
-    const next=Math.max(1,Number(quantity)||1);
-    target.quantity=next;
+    target.quantity=Math.max(1,Number(quantity)||1);
 
     saveCart(items);
     update();
@@ -111,7 +119,8 @@
 
   function count(){
     return cart().reduce(
-      (total,item)=>total+(Number(item.quantity)||0),
+      (total,item)=>
+        total+(Number(item.quantity)||0),
       0
     );
   }
@@ -141,16 +150,23 @@
 
     return `
       <article class="cart-item">
+
         <div class="cart-item-media">
           ${
             item.image
-              ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name||'')}">`
+              ? `<img
+                  src="${escapeHtml(item.image)}"
+                  alt="${escapeHtml(item.name||'')}"
+                >`
               : ''
           }
         </div>
 
         <div class="cart-item-info">
-          <h3>${escapeHtml(item.name||'Untitled product')}</h3>
+
+          <h3>
+            ${escapeHtml(item.name||'Untitled product')}
+          </h3>
 
           ${
             item.description
@@ -171,16 +187,20 @@
           }
 
           <strong>${money(price)}</strong>
+
         </div>
 
         <div class="cart-item-actions">
+
           <button
             type="button"
             data-cart-minus
             data-id="${escapeHtml(item.id)}"
             data-size="${escapeHtml(item.size||'')}"
             data-variant="${escapeHtml(item.variant||'')}"
-          >−</button>
+          >
+            −
+          </button>
 
           <span>${quantity}</span>
 
@@ -190,7 +210,9 @@
             data-id="${escapeHtml(item.id)}"
             data-size="${escapeHtml(item.size||'')}"
             data-variant="${escapeHtml(item.variant||'')}"
-          >+</button>
+          >
+            +
+          </button>
 
           <button
             type="button"
@@ -198,8 +220,12 @@
             data-id="${escapeHtml(item.id)}"
             data-size="${escapeHtml(item.size||'')}"
             data-variant="${escapeHtml(item.variant||'')}"
-          >Remove</button>
+          >
+            Remove
+          </button>
+
         </div>
+
       </article>
     `;
   }
@@ -217,7 +243,8 @@
       qty:Number(item.quantity)||1
     }));
 
-    const button=document.querySelector('[data-demo-checkout]');
+    const button=
+      document.querySelector('[data-demo-checkout]');
 
     if(button){
       button.disabled=true;
@@ -227,38 +254,76 @@
     try{
       const response=await fetch(ORDER_URL,{
         method:'POST',
+
         headers:{
-          'Content-Type':'application/json'
+          'Content-Type':'application/json',
+          'Accept':'application/json'
         },
+
         body:JSON.stringify({
           products
         })
       });
 
       if(!response.ok){
-        throw new Error(`Order request failed: ${response.status}`);
+        const detail=
+          await response.text().catch(()=>'');
+
+        throw new Error(
+          `Order request failed: ${response.status}${
+            detail
+              ? ` - ${detail.slice(0,200)}`
+              : ''
+          }`
+        );
+      }
+
+      /*
+       * If the server redirects directly to checkout,
+       * fetch follows the redirect automatically.
+       */
+      if(
+        response.redirected &&
+        /\/checkout\//.test(response.url)
+      ){
+        window.location.assign(response.url);
+        return;
+      }
+
+      const contentType=
+        response.headers.get('content-type')||'';
+
+      if(!contentType.includes('application/json')){
+        throw new Error(
+          'Order API returned a non-JSON response'
+        );
       }
 
       const order=await response.json();
 
-      if(!order.order_id){
-        throw new Error('Server did not return an order_id');
+      const orderId=
+        order.order_id ??
+        order.orderId ??
+        order.id;
+
+      if(!orderId){
+        throw new Error(
+          'Server did not return an order id'
+        );
       }
 
-      /*
-       * ORDER_URL is:
-       * https://...trycloudflare.com/api/order
-       *
-       * This redirects to:
-       * https://...trycloudflare.com/checkout/{order_id}
-       */
       const checkoutUrl=
-        `${new URL(API_URL).origin}/checkout/${encodeURIComponent(order.order_id)}`;
+        `${API_URL}/checkout/${
+          encodeURIComponent(orderId)
+        }`;
 
-      window.location.href=checkoutUrl;
+      window.location.assign(checkoutUrl);
 
     }catch(error){
-      console.error('Checkout failed:',error);
+      console.error(
+        'Checkout failed:',
+        error
+      );
 
       window.SourceLabUI?.toast(
         'Checkout failed. Please try again.'
@@ -272,24 +337,39 @@
   }
 
   function update(){
-    const page=document.querySelector('[data-cart-page]');
-    const summary=document.querySelector('[data-cart-summary]');
+    const page=
+      document.querySelector('[data-cart-page]');
+
+    const summary=
+      document.querySelector('[data-cart-summary]');
 
     const items=cart();
 
     if(page){
       if(!items.length){
+
         page.innerHTML=`
           <div class="empty-state">
+
             <h2>Your cart is empty.</h2>
-            <p>Add some products to continue.</p>
-            <a class="button button-primary" href="products.html">
+
+            <p>
+              Add some products to continue.
+            </p>
+
+            <a
+              class="button button-primary"
+              href="products.html"
+            >
               Browse products
             </a>
+
           </div>
         `;
+
       }else{
-        page.innerHTML=items.map(cartMarkup).join('');
+        page.innerHTML=
+          items.map(cartMarkup).join('');
       }
     }
 
@@ -298,6 +378,7 @@
 
       summary.innerHTML=`
         <div class="cart-summary-inner">
+
           <p class="eyebrow">
             <span></span>
             Order summary
@@ -328,6 +409,7 @@
           </button>
 
           <p>Secure checkout.</p>
+
         </div>
       `;
     }
@@ -338,19 +420,27 @@
   function refreshWishlist(){
     const items=wishlist();
 
-    document.querySelectorAll('[data-wishlist]').forEach(button=>{
-      const id=button.getAttribute('data-wishlist');
+    document
+      .querySelectorAll('[data-wishlist]')
+      .forEach(button=>{
 
-      const active=items.some(
-        item=>String(item)===String(id)
-      );
+        const id=
+          button.getAttribute('data-wishlist');
 
-      button.classList.toggle('is-active',active);
-      button.setAttribute(
-        'aria-pressed',
-        active?'true':'false'
-      );
-    });
+        const active=items.some(
+          item=>String(item)===String(id)
+        );
+
+        button.classList.toggle(
+          'is-active',
+          active
+        );
+
+        button.setAttribute(
+          'aria-pressed',
+          active?'true':'false'
+        );
+      });
   }
 
   function toggleWishlist(id){
@@ -371,7 +461,9 @@
   }
 
   document.addEventListener('click',event=>{
-    const removeButton=event.target.closest('[data-cart-remove]');
+
+    const removeButton=
+      event.target.closest('[data-cart-remove]');
 
     if(removeButton){
       remove(
@@ -379,22 +471,33 @@
         removeButton.dataset.size||'',
         removeButton.dataset.variant||''
       );
+
       return;
     }
 
-    const minusButton=event.target.closest('[data-cart-minus]');
+    const minusButton=
+      event.target.closest('[data-cart-minus]');
 
     if(minusButton){
+
       const item=cart().find(item=>
-        String(item.id)===String(minusButton.dataset.id)&&
-        String(item.size||'')===String(minusButton.dataset.size||'')&&
-        String(item.variant||'')===String(minusButton.dataset.variant||'')
+        String(item.id)===
+          String(minusButton.dataset.id)&&
+
+        String(item.size||'')===
+          String(minusButton.dataset.size||'')&&
+
+        String(item.variant||'')===
+          String(minusButton.dataset.variant||'')
       );
 
       if(item){
         setQuantity(
           item.id,
-          Math.max(1,(Number(item.quantity)||1)-1),
+          Math.max(
+            1,
+            (Number(item.quantity)||1)-1
+          ),
           item.size||'',
           item.variant||''
         );
@@ -403,13 +506,20 @@
       return;
     }
 
-    const plusButton=event.target.closest('[data-cart-plus]');
+    const plusButton=
+      event.target.closest('[data-cart-plus]');
 
     if(plusButton){
+
       const item=cart().find(item=>
-        String(item.id)===String(plusButton.dataset.id)&&
-        String(item.size||'')===String(plusButton.dataset.size||'')&&
-        String(item.variant||'')===String(plusButton.dataset.variant||'')
+        String(item.id)===
+          String(plusButton.dataset.id)&&
+
+        String(item.size||'')===
+          String(plusButton.dataset.size||'')&&
+
+        String(item.variant||'')===
+          String(plusButton.dataset.variant||'')
       );
 
       if(item){
@@ -424,17 +534,21 @@
       return;
     }
 
-    const checkoutButton=event.target.closest('[data-demo-checkout]');
+    const checkoutButton=
+      event.target.closest('[data-demo-checkout]');
 
     if(checkoutButton){
       checkout();
       return;
     }
 
-    const wishlistButton=event.target.closest('[data-wishlist]');
+    const wishlistButton=
+      event.target.closest('[data-wishlist]');
 
     if(wishlistButton){
-      toggleWishlist(wishlistButton.dataset.wishlist);
+      toggleWishlist(
+        wishlistButton.dataset.wishlist
+      );
     }
   });
 
@@ -451,14 +565,15 @@
     checkout
   };
 
-  if(
-    document.readyState==='loading'
-  ){
+  if(document.readyState==='loading'){
+
     document.addEventListener(
       'DOMContentLoaded',
       update
     );
+
   }else{
     update();
   }
+
 })();
