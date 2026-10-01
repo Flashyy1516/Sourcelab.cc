@@ -1,4 +1,3 @@
-```javascript
 (function(){
   'use strict';
 
@@ -819,4 +818,3 @@
     update();
 
 })();
-```
