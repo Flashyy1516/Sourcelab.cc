@@ -5,7 +5,7 @@
   const WISHLIST_KEY='sourcelab.wishlist.v1';
 
   const ORDER_URL =
-    'https://encountered-computational-proposed-additions.trycloudflare.com/api/order';
+    'https://coated-applications-properties-choice.trycloudflare.com/api/order';
 
   const read=(key,fallback)=>{
     try{
