@@ -5,7 +5,7 @@
   const WISHLIST_KEY='sourcelab.wishlist.v1';
 
   const ORDER_URL =
-    'https://coated-applications-properties-choice.trycloudflare.com/api/order';
+    'https://departure-corners-petersburg-trustee.trycloudflare.com/api/order';
 
   const read=(key,fallback)=>{
     try{
