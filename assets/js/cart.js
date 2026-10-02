@@ -5,7 +5,7 @@
   const WISHLIST_KEY='sourcelab.wishlist.v1';
 
   /* REAL CHECKOUT BACKEND */
-  const API_URL='https://departure-corners-petersburg-trustee.trycloudflare.com';
+  const API_URL='https://email-usd-intensity-watts.trycloudflare.com';
   const ORDER_URL=`${API_URL}/api/order`;
 
   const read=(key,fallback)=>{
